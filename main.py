@@ -235,12 +235,13 @@ class KnowledgePDFPlugin(Star):
         try:
             self.render_pdf(content, title, tmp_path)
             
-            # [FINAL FIX] Using a more compatible result return method
-            return event.plain_result(
-                message_chain=[File(str(tmp_path))]
-            )
+            # Return a MessageEventResult containing the generated PDF file.
+            # The previous implementation incorrectly used `event.plain_result` with a `message_chain` argument,
+            # which `plain_result` does not accept, leading to the runtime error observed.
+            return MessageEventResult(message_chain=[File(str(tmp_path))])
         except Exception as e:
             logger.error(f"Render PDF Error: {e}")
+            # For error cases, we still use `plain_result` to send a simple text message.
             return event.plain_result(f"PDF 生成失败: {str(e)}")
 
 @register("knowledge_pdf", "Master", "专业级知识库导出器", "1.2.1")
