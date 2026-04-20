@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [1.2.4] - 2026-04-20
 
 ### Fixed
-- **发送结果修复**：修正 `event.plain_result` 传入 `message_chain` 参数导致的异常，改用 `MessageEventResult(message_chain=[File(... )])` 正确返回 PDF 文件。
+-- **发送结果修复**：在部分 AstrBot 版本中 `event.plain_result` 传入 `message_chain` 参数导致异常，已改为使用更通用的返回方式。
+
+## [1.2.5] - 2026-04-20
+
+### Fixed
+-- **发送结果修复（最终）**：改为手动实例化 `MessageEventResult` 并设置 `chain`，避免 `MessageEventResult.__init__()` 参数错误，确保 PDF 正常生成并返回文件。
 
 ## [1.2.3] - 2026-04-20
 
