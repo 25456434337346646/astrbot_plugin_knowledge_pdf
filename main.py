@@ -104,11 +104,22 @@ class KnowledgePDFPlugin(Star):
             if mgr and hasattr(mgr, "get_messages"):
                 try:
                     msgs = await mgr.get_messages(session_id=session_id, limit=5)
+                    logger.info(f"Retrieved {len(msgs)} messages from history.")
+                    
                     for m in reversed(msgs):
-                        role = getattr(m, "role", "").lower()
-                        if role in ["assistant", "bot"] and getattr(m, "content", ""):
-                            content = m.content
-                            break
+                        # 调试日志：打印每条消息的特征
+                        role = str(getattr(m, "role", "")).lower()
+                        sender = str(getattr(m, "sender_id", ""))
+                        text = getattr(m, "content", "")
+                        logger.info(f"Tracing msg: role={role}, sender={sender}, len={len(text)}")
+                        
+                        # 广谱识别：只要不是用户发的消息，且有内容，就视为机器人回复
+                        # 或者 role 是 assistant/bot
+                        if role in ["assistant", "bot", "1", "system"] or (sender and sender != str(event.user_id)):
+                            if text and not text.startswith("/"): # 避开指令本身
+                                content = text
+                                logger.info("Found match for bot message!")
+                                break
                 except Exception as e:
                     logger.warning(f"Failed to fetch messages: {e}")
             
