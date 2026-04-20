@@ -118,25 +118,45 @@ class KnowledgePDFPlugin(Star):
             content = None
             if mgr:
                 fetcher = getattr(mgr, "get_messages", None) or getattr(mgr, "get_history", None)
-                if fetcher:
-                    try:
-                        # 兼容不同签名
-                        try:
-                            msgs = await fetcher(session_id=session_id, limit=5)
-                        except:
-                            msgs = await fetcher(limit=5)
+                msgs = []
+                try:
+                    # 尝试 A: 带参数调用
+                    try: msgs = await fetcher(session_id=session_id, limit=10)
+                    except: pass
+                    
+                    # 尝试 B: 不带参数调用 (session 对象本身的 get_messages 往往不需要 ID)
+                    if not msgs:
+                        try: msgs = await fetcher(limit=10)
+                        except: pass
                         
-                        logger.info(f"Retrieved {len(msgs)} messages.")
-                        for m in reversed(msgs):
-                            text = getattr(m, "content", getattr(m, "text", ""))
-                            role = str(getattr(m, "role", "") or getattr(m, "type", "")).lower()
-                            # 识别机器人
-                            if role in ["assistant", "bot", "1", "reply"] or (getattr(m, "sender_id", "") != str(event.user_id)):
-                                if text and not text.startswith("/"):
-                                    content = text
-                                    break
-                    except Exception as e:
-                        logger.warning(f"History fetch error: {e}")
+                    # 尝试 C: 直接翻属性 (很多框架直接存成列表)
+                    if not msgs:
+                        for attr in ["messages", "_messages", "history_list"]:
+                            val = getattr(mgr, attr, None)
+                            if isinstance(val, list):
+                                msgs = val
+                                logger.info(f"Stepped into attribute: {attr}")
+                                break
+                    
+                    if not msgs:
+                        logger.info(f"Manager Probe: name={mgr.__class__.__name__}, dir={dir(mgr)[:15]}")
+
+                    logger.info(f"History Result: Found {len(msgs)} potential nodes.")
+                    for m in reversed(msgs):
+                        text = getattr(m, "content", getattr(m, "text", getattr(m, "raw_message", "")))
+                        # 识别回复角色
+                        role = str(getattr(m, "role", "") or getattr(m, "type", "")).lower()
+                        user = str(getattr(m, "sender_id", "") or getattr(m, "user_id", ""))
+                        
+                        # 避开指令，寻找机器人的干货
+                        if role in ["assistant", "bot", "1", "reply"] or (user and user != str(event.user_id)):
+                            # 简单的文本过滤
+                            if text and (len(text) > 5) and not text.strip().startswith("/"):
+                                content = text
+                                logger.info(f"JACKPOT! Captured bot message (len={len(text)})")
+                                break
+                except Exception as e:
+                    logger.warning(f"Extreme rescue failed: {e}")
             
             if not content:
                 logger.error("Capture capture FAILED: No content found in history.")
