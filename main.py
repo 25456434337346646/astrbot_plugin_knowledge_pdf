@@ -233,7 +233,11 @@ class KnowledgePDFPlugin(Star):
         tmp_path = Path("/tmp") / f"pdf_{uuid.uuid4().hex}.pdf"
         try:
             self.render_pdf(content, title, tmp_path)
-            return event.file_result(str(tmp_path), filename)
+            
+            # [CRITICAL FIX] Use explicit File component instead of event.file_result
+            return MessageEventResult(
+                message_chain=[File(str(tmp_path))]
+            )
         except Exception as e:
             logger.error(f"Render PDF Error: {e}")
             return event.plain_result(f"PDF 生成失败: {str(e)}")
