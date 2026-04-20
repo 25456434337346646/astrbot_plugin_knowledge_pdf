@@ -32,37 +32,50 @@ async def fetch_content(context: Context, key: str) -> str | None:
     """Retrieve knowledge base content for *key*.
 
     1. Attempts direct lookup.
-    2. Falls back to semantic search to find the best match.
+    2. Falls back to semantic search with enhanced logging.
     """
+    kb = getattr(context, "knowledge_base", None)
+    if not kb:
+        logger.warning("Knowledge base not found on context.")
+        return None
+
     # Strategy 1 – Direct Key Lookup
     try:
-        kb = getattr(context, "knowledge_base", None)
-        if kb and hasattr(kb, "get"):
-            content = kb.get(key)
-            if content: return content
-    except Exception:
-        pass
+        content = kb.get(key)
+        if content: 
+            logger.info(f"Direct match found for '{key}'")
+            return content
+    except Exception as exc:
+        logger.debug(f"Direct lookup failed: {exc}")
 
     # Strategy 2 – Semantic Search Fallback
     try:
-        # AstrBot V4 typically provides a search method on knowledge_base
-        if kb and hasattr(kb, "search"):
-            results = await kb.search(key)
+        # Try both 'search' and 'query' methods if they exist
+        search_method = getattr(kb, "search", None) or getattr(kb, "query", None)
+        if search_method:
+            logger.info(f"Attempting semantic search for '{key}'...")
+            results = await search_method(key)
             if results and len(results) > 0:
-                # Combine top results or take the best one
+                logger.info(f"Found {len(results)} search results.")
+                # Combine top hits
                 top_hit = results[0]
-                content = f"--- 来源: {top_hit.get('source', '未知')} ---\n\n"
-                content += top_hit.get('content', '')
+                # Some API returns dict, some returns object
+                if isinstance(top_hit, dict):
+                    source = top_hit.get('source', '未知来源')
+                    text = top_hit.get('content', top_hit.get('text', ''))
+                else:
+                    source = getattr(top_hit, 'source', '未知来源')
+                    text = getattr(top_hit, 'content', getattr(top_hit, 'text', ''))
+                
+                content = f"--- 来源: {source} ---\n\n{text}"
                 return content
+            else:
+                logger.warning(f"No semantic search results for '{key}'")
     except Exception as exc:
-        logger.warning(f"Semantic search failed: {exc}")
+        logger.error(f"Semantic search failed: {exc}")
+        import traceback
+        logger.error(traceback.format_exc())
 
-    # Strategy 3 – Legacy Filesystem
-    base_path = os.getenv("KNOWLEDGE_BASE_PATH")
-    if base_path:
-        candidate = Path(base_path) / f"{key}.md"
-        if candidate.is_file():
-            return candidate.read_text(encoding="utf-8")
     return None
 
 
