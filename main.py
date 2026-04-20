@@ -97,31 +97,40 @@ class KnowledgePDFPlugin(Star):
             # 安全寻找消息管理器
             inst = getattr(self.context, "inst", None)
             mgr = getattr(self.context, "message_manager", None)
-            if not mgr and inst:
-                mgr = getattr(inst, "message_manager", None)
             
-            content = None
-            if mgr and hasattr(mgr, "get_messages"):
-                try:
-                    msgs = await mgr.get_messages(session_id=session_id, limit=5)
-                    logger.info(f"Retrieved {len(msgs)} messages from history.")
-                    
-                    for m in reversed(msgs):
-                        # 调试日志：打印每条消息的特征
-                        role = str(getattr(m, "role", "")).lower()
-                        sender = str(getattr(m, "sender_id", ""))
-                        text = getattr(m, "content", "")
-                        logger.info(f"Tracing msg: role={role}, sender={sender}, len={len(text)}")
-                        
-                        # 广谱识别：只要不是用户发的消息，且有内容，就视为机器人回复
-                        # 或者 role 是 assistant/bot
-                        if role in ["assistant", "bot", "1", "system"] or (sender and sender != str(event.user_id)):
-                            if text and not text.startswith("/"): # 避开指令本身
-                                content = text
-                                logger.info("Found match for bot message!")
-                                break
-                except Exception as e:
-                    logger.warning(f"Failed to fetch messages: {e}")
+            # 3. 更激进的寻找方式：扫描所有相关的属性
+            if not mgr:
+                candidates = ["message_mgr", "history", "session", "db_mgr", "conversation_mgr"]
+                for c in candidates:
+                    mgr = getattr(self.context, c, None) or getattr(inst, c, None)
+                    if mgr:
+                        logger.info(f"Found potential manager: {c} ({mgr.__class__.__name__})")
+                        if hasattr(mgr, "get_messages") or hasattr(mgr, "get_history"):
+                            break
+                        else:
+                            mgr = None
+            
+            # 记录下我们到底在 context 里看到了什么（调试用）
+            logger.info(f"Context Discovery: context_attrs={dir(self.context)[:10]}...")
+            
+            last_content = None
+            if mgr:
+                # 兼容不同的方法名
+                fetcher = getattr(mgr, "get_messages", None) or getattr(mgr, "get_history", None)
+                if fetcher:
+                    try:
+                        msgs = await fetcher(session_id=session_id, limit=5)
+                        logger.info(f"Successfully retrieved {len(msgs)} messages.")
+                        for m in reversed(msgs):
+                            text = getattr(m, "content", getattr(m, "text", ""))
+                            # 识别机器人回复
+                            role = str(getattr(m, "role", "")).lower()
+                            if role in ["assistant", "bot", "1", "system"] or (getattr(m, "sender_id", "") != str(event.user_id)):
+                                if text and not text.startswith("/"):
+                                    last_content = text
+                                    break
+                    except Exception as e:
+                        logger.warning(f"Fetch execution failed: {e}")
             
             if not content:
                 return event.plain_result("未能捕捉到对话内容，请先检索一次知识库。")
