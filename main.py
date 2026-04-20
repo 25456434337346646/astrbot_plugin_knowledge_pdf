@@ -104,7 +104,7 @@ class KnowledgePDFPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    @filter.command("knowledgepdf")
+    @filter.command("knowledge_pdf")
     async def knowledgepdf(self, event: AstrMessageEvent) -> MessageEventResult:
         """Handle the ``/knowledgepdf <key>`` command.
 
