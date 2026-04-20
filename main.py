@@ -98,26 +98,44 @@ class KnowledgePDFPlugin(Star):
             inst = getattr(self.context, "inst", None)
             mgr = getattr(self.context, "message_manager", None)
             
-            # 3. 极激进探测：尝试从 event 或 context 寻找历史入口
+            # 3. 终极探测：穿透代理，尝试全局和私有属性
             if not mgr:
-                # 优先尝试 event 对象（往往直接带有会话引用）
-                for key in ["session", "history", "message_mgr"]:
-                    mgr = getattr(event, key, None)
-                    if mgr:
-                        logger.info(f"Matched manager on EVENT: {key}")
-                        break
+                # 尝试 A: 从 __dict__ 寻找隐藏的实例引用 (穿透 Proxy)
+                ctx_dict = getattr(self.context, "__dict__", {})
+                for k, v in ctx_dict.items():
+                    if k.endswith("context") or k.endswith("inst"):
+                        logger.info(f"Pierced proxy! Found hidden ref: {k}")
+                        mgr = getattr(v, "message_manager", None) or getattr(v, "message_mgr", None)
+                        if mgr: break
                 
+                # 尝试 B: 全局单例模式 (AstrBot 核心)
                 if not mgr:
-                    candidates = ["message_mgr", "history", "session", "db_mgr"]
-                    for c in candidates:
-                        mgr = getattr(self.context, c, None) or getattr(inst, c, None)
-                        if mgr:
-                            logger.info(f"Matched manager on CONTEXT: {c}")
-                            break
+                    try:
+                        from astrbot.core.instance import AstrBot
+                        bot_inst = AstrBot.get_instance()
+                        if bot_inst:
+                            mgr = getattr(bot_inst, "message_manager", None) or getattr(bot_inst, "message_mgr", None)
+                            if mgr: logger.info("Accessed history via GLOBAL singleton!")
+                    except: pass
+
+                # 尝试 C: 从 event 对象再次寻找 (Session ID 查找)
+                if not mgr:
+                    for key in ["session", "history", "message_mgr"]:
+                        mgr = getattr(event, key, None)
+                        if mgr: break
             
             content = None
             if mgr:
+                # 首先确保 mgr 有获取消息的能力
                 fetcher = getattr(mgr, "get_messages", None) or getattr(mgr, "get_history", None)
+                
+                # 如果 mgr 是 session 却没方法，尝试去它的提供者 (Provider) 找
+                if not fetcher:
+                    provider = getattr(mgr, "provider", None)
+                    if provider:
+                        fetcher = getattr(provider, "get_messages", None)
+                        mgr = provider # 切换 mgr 到提供者
+                
                 msgs = []
                 try:
                     # 尝试 A: 带参数调用
