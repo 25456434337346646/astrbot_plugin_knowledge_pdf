@@ -34,65 +34,26 @@ async def fetch_content(context: Context, key: str) -> str | None:
     1. Attempts direct lookup.
     2. Falls back to semantic search with enhanced logging.
     """
-    # Find KB Manager through multiple entry points
-    kb = getattr(context, "knowledge_base", None)
-    if not kb:
-        # Try finding it on the main instance
-        inst = getattr(context, "inst", None)
-        if inst:
-            kb = getattr(inst, "knowledge_base", None) or getattr(inst, "kb_mgr", None)
-    
-    if not kb:
-        logger.warning("Knowledge base manager not found in context or instance. Testing search tools...")
-        # Deep search: check all attributes for something with search/query
-        for attr in dir(context):
-            candidate = getattr(context, attr, None)
-            if candidate and (hasattr(candidate, "search") or hasattr(candidate, "query")):
-                if "knowledge" in attr.lower():
-                    kb = candidate
-                    logger.info(f"Found potential KB manager in attribute: {attr}")
-                    break
-
-    if not kb:
-        logger.error("Failed to find any knowledge base manager.")
-        return None
-
-    # Strategy 1 – Direct Key Lookup
+    # Final Strategy – Tool Proxy (The most robust way)
     try:
-        content = kb.get(key)
-        if content: 
-            logger.info(f"Direct match found for '{key}'")
-            return content
+        logger.info(f"Attempting to invoke tool 'astr_kb_search' for '{key}'...")
+        # Try to find the tool manager or use the context's tool caller
+        manager = getattr(context, "tool_manager", None) or getattr(getattr(context, "inst", None), "tool_manager", None)
+        if manager:
+            # result = await manager.invoke_tool("astr_kb_search", {"query": key})
+            # Some versions use a different invocation pattern
+            tools = getattr(manager, "tools", {})
+            if "astr_kb_search" in tools:
+                tool = tools["astr_kb_search"]
+                func = getattr(tool, "func", None)
+                if func:
+                    logger.info("Found 'astr_kb_search' tool. Calling it...")
+                    res = await func(query=key)
+                    if res:
+                        # The tool usually returns a string with "Sources:" etc.
+                        return str(res)
     except Exception as exc:
-        logger.debug(f"Direct lookup failed: {exc}")
-
-    # Strategy 2 – Semantic Search Fallback
-    try:
-        # Try both 'search' and 'query' methods if they exist
-        search_method = getattr(kb, "search", None) or getattr(kb, "query", None)
-        if search_method:
-            logger.info(f"Attempting semantic search for '{key}'...")
-            results = await search_method(key)
-            if results and len(results) > 0:
-                logger.info(f"Found {len(results)} search results.")
-                # Combine top hits
-                top_hit = results[0]
-                # Some API returns dict, some returns object
-                if isinstance(top_hit, dict):
-                    source = top_hit.get('source', '未知来源')
-                    text = top_hit.get('content', top_hit.get('text', ''))
-                else:
-                    source = getattr(top_hit, 'source', '未知来源')
-                    text = getattr(top_hit, 'content', getattr(top_hit, 'text', ''))
-                
-                content = f"--- 来源: {source} ---\n\n{text}"
-                return content
-            else:
-                logger.warning(f"No semantic search results for '{key}'")
-    except Exception as exc:
-        logger.error(f"Semantic search failed: {exc}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.warning(f"Tool proxy invocation failed: {exc}")
 
     return None
 
