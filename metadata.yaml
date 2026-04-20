@@ -1,0 +1,9 @@
+name: knowledge_pdf
+display_name: Knowledge PDF Exporter
+description: "从知识库导出 PDF 文件的 AstrBot 插件。"
+author: Master
+version: "1.0.0"
+required_python: ">=3.9"
+support_platforms: []
+astrbot_version: ">=4.16,<5"
+entry: main.py
