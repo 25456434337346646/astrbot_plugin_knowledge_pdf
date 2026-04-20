@@ -235,8 +235,8 @@ class KnowledgePDFPlugin(Star):
         try:
             self.render_pdf(content, title, tmp_path)
             
-            # [CRITICAL FIX] Use explicit File component instead of event.file_result
-            return MessageEventResult(
+            # [FINAL FIX] Using a more compatible result return method
+            return event.plain_result(
                 message_chain=[File(str(tmp_path))]
             )
         except Exception as e:
