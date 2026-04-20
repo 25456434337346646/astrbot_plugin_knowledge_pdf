@@ -246,6 +246,8 @@ class KnowledgePDFPlugin(Star):
             # For error cases, we still use `plain_result` to send a simple text message.
             return event.plain_result(f"PDF 生成失败: {str(e)}")
 
-@register("knowledge_pdf", "Master", "专业级知识库导出器", "1.2.1")
+@register("knowledge_pdf", "Master", "专业级知识库导出器", "1.2.5")
 def plugin_entry(context: Context):
+    import os
+    logger.info(f"--- [DEBUG] LOADING PLUGIN FROM: {os.path.abspath(__file__)} ---")
     return KnowledgePDFPlugin(context)
