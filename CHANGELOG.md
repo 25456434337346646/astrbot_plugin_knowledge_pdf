@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.3] - 2026-04-20
+
+### Fixed
+- **核心发送逻辑重构**：修复了在部分 AstrBot 版本下，由于 `MessageEventResult` 构造函数参数变更导致的 `TypeError`。
+- **发送 API 兼容性**：弃用了不稳定的 `event.file_result`，改用全版本通用的 `event.plain_result` 组件链注入机制，确保 PDF 文件在各种协议端都能稳定发送。
+
 ## [1.2.2] - 2026-04-20
 
 ### Fixed
