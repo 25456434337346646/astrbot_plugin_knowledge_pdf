@@ -1,7 +1,7 @@
 name: astrbot_plugin_knowledge_pdf
 desc: "专业级 PDF 导出工具。基于 ReportLab 引擎，支持 `/pdf` 导出回复或关键词检索知识库。适配 macOS/Linux 中文字体。"
 help: "使用 `/pdf` 导出最后一次对话内容；使用 `/pdf <关键词>` 搜索知识库并导出为更精美的 PDF。"
-version: "1.2.0"
+version: "1.2.2"
 author: "Master & Anti-Gravity"
 repo: https://github.com/25456434337346646/astrbot_plugin_knowledge_pdf
 entry: main.py

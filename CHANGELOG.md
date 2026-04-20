@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - 2026-04-20
+
+### Fixed
+- **安全渲染模式**：引入了对超长 Base64 字符串的自动识别与过滤逻辑，彻底解决了因图片数据导致 PDF 引擎崩溃的问题。
+- **鲁棒性增强**：为段落生成添加了强制容错机制，确保在遇到不可解析的损坏字符时仍能成功输出 PDF。
+
 ## [1.2.1] - 2026-04-20
 
 ### Added
