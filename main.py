@@ -98,41 +98,48 @@ class KnowledgePDFPlugin(Star):
             inst = getattr(self.context, "inst", None)
             mgr = getattr(self.context, "message_manager", None)
             
-            # 3. 更激进的寻找方式：扫描所有相关的属性
+            # 3. 极激进探测：尝试从 event 或 context 寻找历史入口
             if not mgr:
-                candidates = ["message_mgr", "history", "session", "db_mgr", "conversation_mgr"]
-                for c in candidates:
-                    mgr = getattr(self.context, c, None) or getattr(inst, c, None)
+                # 优先尝试 event 对象（往往直接带有会话引用）
+                for key in ["session", "history", "message_mgr"]:
+                    mgr = getattr(event, key, None)
                     if mgr:
-                        logger.info(f"Found potential manager: {c} ({mgr.__class__.__name__})")
-                        if hasattr(mgr, "get_messages") or hasattr(mgr, "get_history"):
+                        logger.info(f"Matched manager on EVENT: {key}")
+                        break
+                
+                if not mgr:
+                    candidates = ["message_mgr", "history", "session", "db_mgr"]
+                    for c in candidates:
+                        mgr = getattr(self.context, c, None) or getattr(inst, c, None)
+                        if mgr:
+                            logger.info(f"Matched manager on CONTEXT: {c}")
                             break
-                        else:
-                            mgr = None
             
-            # 记录下我们到底在 context 里看到了什么（调试用）
-            logger.info(f"Context Discovery: context_attrs={dir(self.context)[:10]}...")
-            
-            last_content = None
+            content = None
             if mgr:
-                # 兼容不同的方法名
                 fetcher = getattr(mgr, "get_messages", None) or getattr(mgr, "get_history", None)
                 if fetcher:
                     try:
-                        msgs = await fetcher(session_id=session_id, limit=5)
-                        logger.info(f"Successfully retrieved {len(msgs)} messages.")
+                        # 兼容不同签名
+                        try:
+                            msgs = await fetcher(session_id=session_id, limit=5)
+                        except:
+                            msgs = await fetcher(limit=5)
+                        
+                        logger.info(f"Retrieved {len(msgs)} messages.")
                         for m in reversed(msgs):
                             text = getattr(m, "content", getattr(m, "text", ""))
-                            # 识别机器人回复
-                            role = str(getattr(m, "role", "")).lower()
-                            if role in ["assistant", "bot", "1", "system"] or (getattr(m, "sender_id", "") != str(event.user_id)):
+                            role = str(getattr(m, "role", "") or getattr(m, "type", "")).lower()
+                            # 识别机器人
+                            if role in ["assistant", "bot", "1", "reply"] or (getattr(m, "sender_id", "") != str(event.user_id)):
                                 if text and not text.startswith("/"):
-                                    last_content = text
+                                    content = text
                                     break
                     except Exception as e:
-                        logger.warning(f"Fetch execution failed: {e}")
+                        logger.warning(f"History fetch error: {e}")
             
             if not content:
+                logger.error("Capture capture FAILED: No content found in history.")
                 return event.plain_result("未能捕捉到对话内容，请先检索一次知识库。")
             filename = "Captured_Conversation.pdf"
 
