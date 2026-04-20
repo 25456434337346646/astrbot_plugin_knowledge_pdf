@@ -34,9 +34,27 @@ async def fetch_content(context: Context, key: str) -> str | None:
     1. Attempts direct lookup.
     2. Falls back to semantic search with enhanced logging.
     """
+    # Find KB Manager through multiple entry points
     kb = getattr(context, "knowledge_base", None)
     if not kb:
-        logger.warning("Knowledge base not found on context.")
+        # Try finding it on the main instance
+        inst = getattr(context, "inst", None)
+        if inst:
+            kb = getattr(inst, "knowledge_base", None) or getattr(inst, "kb_mgr", None)
+    
+    if not kb:
+        logger.warning("Knowledge base manager not found in context or instance. Testing search tools...")
+        # Deep search: check all attributes for something with search/query
+        for attr in dir(context):
+            candidate = getattr(context, attr, None)
+            if candidate and (hasattr(candidate, "search") or hasattr(candidate, "query")):
+                if "knowledge" in attr.lower():
+                    kb = candidate
+                    logger.info(f"Found potential KB manager in attribute: {attr}")
+                    break
+
+    if not kb:
+        logger.error("Failed to find any knowledge base manager.")
         return None
 
     # Strategy 1 – Direct Key Lookup
