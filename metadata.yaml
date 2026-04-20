@@ -1,9 +1,7 @@
-name: knowledge_pdf
-display_name: Knowledge PDF Exporter
-description: "从知识库导出 PDF 文件的 AstrBot 插件。"
-author: Master
-version: "1.0.0"
-required_python: ">=3.9"
-support_platforms: []
-astrbot_version: ">=4.16,<5"
+name: astrbot_plugin_knowledge_pdf
+desc: "极简 PDF 导出工具。支持 `/pdf` 直接导出上一条回复，或 `/pdf <关键词>` 检索知识库并导出。"
+help: "使用 `/pdf` 导出最后一次对话内容；使用 `/pdf <关键词>` 搜索知识库并导出为 PDF。"
+version: "1.1.0"
+author: "Master & Anti-Gravity"
+repo: https://github.com/25456434337346646/astrbot_plugin_knowledge_pdf
 entry: main.py
