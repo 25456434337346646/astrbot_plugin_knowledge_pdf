@@ -138,8 +138,21 @@ class KnowledgePDFPlugin(Star):
                                 logger.info(f"Stepped into attribute: {attr}")
                                 break
                     
+                    # 尝试 D: 针对 Dataclass (MessageSession) 的深挖
                     if not msgs:
-                        logger.info(f"Manager Probe: name={mgr.__class__.__name__}, dir={dir(mgr)[:15]}")
+                        # 看看有没有 history 属性
+                        hist = getattr(mgr, "history", None)
+                        if hist:
+                            logger.info("Deep focus: Found 'history' on session object.")
+                            msgs = getattr(hist, "messages", []) or []
+                            if not msgs and hasattr(hist, "get_messages"):
+                                try: msgs = await hist.get_messages(limit=10)
+                                except: pass
+                    
+                    if not msgs:
+                        # 打印所有非内置属性，让我们看个明白
+                        all_attrs = [a for a in dir(mgr) if not a.startswith("__")]
+                        logger.info(f"Manager Attributes Hunt: {all_attrs}")
 
                     logger.info(f"History Result: Found {len(msgs)} potential nodes.")
                     for m in reversed(msgs):
