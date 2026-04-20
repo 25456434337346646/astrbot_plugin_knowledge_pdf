@@ -28,34 +28,41 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
 
-def fetch_content(context: Context, key: str) -> str | None:
-    """Retrieve raw knowledge base content for *key*.
+async def fetch_content(context: Context, key: str) -> str | None:
+    """Retrieve knowledge base content for *key*.
 
-    The default implementation tries three strategies in order:
-    1. ``context.knowledge_base.get(key)`` – the official API (if it exists).
-    2. Look for a file ``<key>.md`` under a directory defined by the env var
-       ``KNOWLEDGE_BASE_PATH``.
-    3. Return ``None`` when the content cannot be found.
+    1. Attempts direct lookup.
+    2. Falls back to semantic search to find the best match.
     """
-    # Strategy 1 – official API (may raise AttributeError if not present)
+    # Strategy 1 – Direct Key Lookup
     try:
-        get = getattr(context, "knowledge_base", None)
-        if get is not None and hasattr(get, "get"):
-            content = get.get(key)
-            if content:
-                return content
-    except Exception as exc:  # pragma: no cover – defensive, not expected
-        logger.warning(f"Knowledge base API lookup failed: {exc}")
+        kb = getattr(context, "knowledge_base", None)
+        if kb and hasattr(kb, "get"):
+            content = kb.get(key)
+            if content: return content
+    except Exception:
+        pass
 
-    # Strategy 2 – filesystem fallback
+    # Strategy 2 – Semantic Search Fallback
+    try:
+        # AstrBot V4 typically provides a search method on knowledge_base
+        if kb and hasattr(kb, "search"):
+            results = await kb.search(key)
+            if results and len(results) > 0:
+                # Combine top results or take the best one
+                top_hit = results[0]
+                content = f"--- 来源: {top_hit.get('source', '未知')} ---\n\n"
+                content += top_hit.get('content', '')
+                return content
+    except Exception as exc:
+        logger.warning(f"Semantic search failed: {exc}")
+
+    # Strategy 3 – Legacy Filesystem
     base_path = os.getenv("KNOWLEDGE_BASE_PATH")
     if base_path:
         candidate = Path(base_path) / f"{key}.md"
         if candidate.is_file():
-            try:
-                return candidate.read_text(encoding="utf-8")
-            except Exception as exc:  # pragma: no cover
-                logger.error(f"Failed to read knowledge file {candidate}: {exc}")
+            return candidate.read_text(encoding="utf-8")
     return None
 
 
@@ -118,7 +125,7 @@ class KnowledgePDFPlugin(Star):
 
         key = args[1].strip()
         logger.info(f"Generating PDF for knowledge key: {key}")
-        content = fetch_content(self.context, key)
+        content = await fetch_content(self.context, key)
         if not content:
             return event.plain_result(f"未找到知识条目 `{key}`，请检查键名或确保知识库已配置。")
 
