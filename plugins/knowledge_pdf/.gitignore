@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+ENV
+env
+
+# Temporary PDF files (if saved in local dir)
+*.pdf
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+_run_*.py
