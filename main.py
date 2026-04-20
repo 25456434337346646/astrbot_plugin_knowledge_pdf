@@ -34,26 +34,53 @@ async def fetch_content(context: Context, key: str) -> str | None:
     1. Attempts direct lookup.
     2. Falls back to semantic search with enhanced logging.
     """
-    # Final Strategy – Tool Proxy (The most robust way)
+    # The most aggressive hunting strategy for tools
     try:
-        logger.info(f"Attempting to invoke tool 'astr_kb_search' for '{key}'...")
-        # Try to find the tool manager or use the context's tool caller
-        manager = getattr(context, "tool_manager", None) or getattr(getattr(context, "inst", None), "tool_manager", None)
-        if manager:
-            # result = await manager.invoke_tool("astr_kb_search", {"query": key})
-            # Some versions use a different invocation pattern
-            tools = getattr(manager, "tools", {})
-            if "astr_kb_search" in tools:
-                tool = tools["astr_kb_search"]
-                func = getattr(tool, "func", None)
-                if func:
-                    logger.info("Found 'astr_kb_search' tool. Calling it...")
-                    res = await func(query=key)
-                    if res:
-                        # The tool usually returns a string with "Sources:" etc.
-                        return str(res)
+        # 1. Try built-in invoke_tool if it exists
+        if hasattr(context, "invoke_tool"):
+            logger.info("Using context.invoke_tool...")
+            res = await context.invoke_tool("astr_kb_search", {"query": key})
+            if res: return str(res)
+
+        # 2. Scrape plugin managers and tool managers
+        inst = getattr(context, "inst", None)
+        potential_managers = [
+            context,
+            inst,
+            getattr(context, "plugin_manager", None),
+            getattr(inst, "plugin_mgr", None),
+            getattr(context, "tool_manager", None),
+            getattr(inst, "tool_mgr", None)
+        ]
+
+        logger.info("Scanning potential managers...")
+        for mgr in potential_managers:
+            if not mgr: continue
+            # Try to find a 'search' method directly on the manager
+            if hasattr(mgr, "search_knowledge_base"):
+                logger.info(f"Found search_knowledge_base on {mgr.__class__.__name__}")
+                res = await mgr.search_knowledge_base(key)
+                if res: return str(res)
+
+            # Look into tool collections
+            tools = getattr(mgr, "tools", None)
+            if isinstance(tools, dict):
+                logger.info(f"Inspecting tools in {mgr.__class__.__name__}: {list(tools.keys())}")
+                if "astr_kb_search" in tools:
+                    tool = tools["astr_kb_search"]
+                    func = getattr(tool, "func", None) or getattr(tool, "call", None)
+                    if func:
+                        logger.info("Tool found! Executing...")
+                        # Tool might be sync or async
+                        if asyncio.iscoroutinefunction(func):
+                            res = await func(query=key)
+                        else:
+                            res = func(query=key)
+                        if res: return str(res)
     except Exception as exc:
-        logger.warning(f"Tool proxy invocation failed: {exc}")
+        logger.warning(f"Extreme tool hunt failed: {exc}")
+        import traceback
+        logger.error(traceback.format_exc())
 
     return None
 
